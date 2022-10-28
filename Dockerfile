@@ -2,4 +2,7 @@
 FROM python:3.10
 COPY . .
 RUN sh install.sh
-#RUN python "who is the father of Athena?"
+
+# Install production dependencies.
+RUN pip install Flask gunicorn
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app

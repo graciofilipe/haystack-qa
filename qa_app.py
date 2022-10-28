@@ -33,20 +33,17 @@ def route_exec():
     command = request.data.decode('utf-8')
     try:
         extractive_pred = extractive_pipe.run(
-            query=args.question,
-            params={"Retriever": {"top_k": 5}, "Reader": {"top_k": 5}}
+            query="who is the father of Athena?",
+            params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}}
         )
         
         # completedProcess = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10, universal_newlines=True)
-        for answer in extractive_pred['answers']
-
-        
-        # response = make_response(completedProcess.stdout, 200)
-        # response.mimetype = "text/plain"
-
-        response = 
+        for answer in extractive_pred['answers']:
+             if answer.score > 0.90:
+                 response = make_response(answer.answer, 200)
 
         return response
+
     except subprocess.TimeoutExpired:
         response = make_response("Timedout", 400)
         response.mimetype = "text/plain"
