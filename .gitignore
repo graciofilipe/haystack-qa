@@ -1,0 +1,5 @@
+faiss_document_store.db
+my_faiss_index.faiss
+my_faiss_index.json
+tests.tar
+haystack
