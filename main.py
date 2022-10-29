@@ -1,8 +1,5 @@
 from fastapi import FastAPI
-
-app = FastAPI()
-
-import logging
+from pydantic import BaseModel
 import os
 import subprocess
 from haystack.document_stores import FAISSDocumentStore
@@ -24,18 +21,32 @@ retriever = EmbeddingRetriever(
 
 extractive_pipe = ExtractiveQAPipeline(reader, retriever)
 
-@app.get("/")
-async def root():
-    logging.info('hello 1')
+##
+class QuestionQuery(BaseModel):
+    query: str
+    top_k: int
+
+##
+
+app = FastAPI()
+
+@app.get("/hello")
+async def return_hello():
+    return "Hellow"
+
+@app.post("/question/")
+async def question(question: QuestionQuery):
+
     extractive_pred = extractive_pipe.run(
-            query="who is the father of Athena?",
-            params={"Retriever": {"top_k": 2}, "Reader": {"top_k": 2}}
+            query=question.query,
+            params={"Retriever": {"top_k": question.top_k}, "Reader": {"top_k": question.top_k}}
         )
 
     dict_of_responses = {}
     counter = 0
     for answer in extractive_pred['answers']:
         if answer.score > 0.7:
-                dict_of_responses = {str(counter): answer.answer}
+                dict_of_responses[str(counter)] = answer.answer
+                counter += 1
 
     return dict_of_responses
