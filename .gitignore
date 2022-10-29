@@ -3,3 +3,4 @@ my_faiss_index.faiss
 my_faiss_index.json
 tests.tar
 haystack
+__pycache__/
