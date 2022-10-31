@@ -1,19 +1,28 @@
+import google.cloud.aiplatform as aip
+from google_cloud_pipeline_components.experimental.custom_job import utils
+from kfp.v2 import compiler, dsl
+from kfp.v2.dsl import component
+from google.cloud import storage
+from python_utils import download_files
 
 
-
-
-def training():
+@component(
+    base_image="europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-training:tag1",
+)
+def training(
+    bucket_name: str ="filipegracio-haystack",
+    data_path: str ="data/myth/"
+    ):
     from haystack.utils import convert_files_to_docs, launch_es
     from haystack.document_stores import FAISSDocumentStore
     from haystack.nodes import PreProcessor, EmbeddingRetriever, FARMReader
     from haystack.pipelines import ExtractiveQAPipeline
 
-
-
+    download_files(bucket_name=bucket_name, prefix=data_path, dl_dir=data_path)
 
     launch_es()
 
-    all_docs = convert_files_to_docs(dir_path="./docs_data/")
+    all_docs = convert_files_to_docs(dir_path=data_path)
 
 
     preprocessor = PreProcessor(
