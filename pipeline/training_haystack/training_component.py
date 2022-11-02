@@ -1,4 +1,5 @@
 from kfp.v2.dsl import component
+from typing import NamedTuple
 
 
 
@@ -9,7 +10,15 @@ def training_comp(
     bucket_name: str ="filipegracio-haystack",
     data_path: str ="myth/data",
     artifact_path: str = "myth/model/"
-    ):
+    ) -> NamedTuple(
+    "Outputs",
+    [
+        ("index_faiss_file_path", str),  
+        ("index_json_file_path", str),  
+        ("document_db_path", str),
+        ("pipeline_yaml_path", str)
+    ],
+):
 
     from google.cloud import storage
     from pathlib import Path
@@ -128,3 +137,8 @@ def training_comp(
     #         print('context:::', answer.context)
     #         print('confidence:::', answer.score)
     #         print('\n')
+
+    return(artifact_path + "my_faiss_index.faiss",
+    artifact_path + "my_faiss_index.json", 
+    artifact_path + "faiss_document_store.db",
+    artifact_path + "pipe.yaml")
