@@ -9,7 +9,7 @@ from load_and_test.test_component import test_comp
 @dsl.pipeline(name="haystack-training")
 def pipeline():
     training_op = training_comp()
-    deploy_op = deploy_comp(
+    test_op = test_comp(
     bucket_name ="filipegracio-haystack",
     artifact_path=training_op.outputs["artifact_path"],
     index_faiss_file_path=training_op.outputs["index_faiss_file_path"],
