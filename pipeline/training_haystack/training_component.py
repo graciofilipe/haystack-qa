@@ -16,7 +16,8 @@ def training_comp(
         ("index_faiss_file_path", str),  
         ("index_json_file_path", str),  
         ("document_db_path", str),
-        ("pipeline_yaml_path", str)
+        ("pipeline_yaml_path", str), 
+        ("artifact_path", str)
     ],
 ):
 
@@ -141,4 +142,5 @@ def training_comp(
     return(artifact_path + "my_faiss_index.faiss",
     artifact_path + "my_faiss_index.json", 
     artifact_path + "faiss_document_store.db",
-    artifact_path + "pipe.yaml")
+    artifact_path + "pipe.yaml", 
+    artifact_path)

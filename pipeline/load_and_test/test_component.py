@@ -6,8 +6,9 @@ from typing import NamedTuple
 @component(
     base_image="europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-deploy:tag1",
 )
-def deploy_comp(
+def test_comp(
     bucket_name: str ="filipegracio-haystack",
+    artifact_path: str = None,
     index_faiss_file_path: str = None,
     index_json_file_path: str = None,
     document_db_path: str = None,
@@ -27,7 +28,7 @@ def deploy_comp(
 
     def download_files(bucket_name,
                     prefix,
-                    dl_dir):
+                    dl_dir="./"):
 
             storage_client = storage.Client()
             bucket = storage_client.get_bucket(bucket_name)
@@ -38,26 +39,29 @@ def deploy_comp(
                 file_split = blob.name.split("/")
                 directory = "/".join(file_split[0:-1])
                 Path(directory).mkdir(parents=True, exist_ok=True)
-                blob.download_to_filename(blob.name)
+                blob.download_to_filename(dl_dir + blob.name)
 
 
     download_files(bucket_name=bucket_name,
                    prefix=index_faiss_file_path,
-                   dl_dir=".")
+                   dl_dir="./")
+
     download_files(bucket_name=bucket_name,
                    prefix=index_json_file_path,
-                   dl_dir=".")
+                   dl_dir="./")
+
     download_files(bucket_name=bucket_name,
                    prefix=document_db_path,
-                   dl_dir=".")
+                   dl_dir="./")
+
     download_files(bucket_name=bucket_name,
                    prefix=pipeline_yaml_path,
-                   dl_dir=".")
+                   dl_dir="./")
 
-    print("******** DOWNLOADS FINISHED **************")
+    index_file_name = index_faiss_file_path.split('/')[-1]
+    os.chdir(artifact_path)
 
-    new_document_store = FAISSDocumentStore.load("my_faiss_index.faiss")
-
+    new_document_store = FAISSDocumentStore.load(index_file_name)
     reader = FARMReader(model_name_or_path="deepset/roberta-base-squad2", use_gpu=False)
 
     retriever = EmbeddingRetriever(
