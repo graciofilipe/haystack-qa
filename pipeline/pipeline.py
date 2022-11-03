@@ -4,10 +4,18 @@ from kfp.v2 import compiler, dsl
 from kfp.v2.dsl import component
 
 from training_haystack.training_component import training_comp
+from deploying_haystack.deploy_component import deploy_comp
 
 @dsl.pipeline(name="haystack-training")
 def pipeline():
     training_op = training_comp()
+    deploy_op = deploy_comp(
+    bucket_name ="filipegracio-haystack",
+    index_faiss_file_path=training_op.outputs["index_faiss_file_path"],
+    index_json_file_path=training_op.outputs["index_json_file_path"],
+    document_db_path=training_op.outputs["document_db_path"],
+    pipeline_yaml_path=training_op.outputs["pipeline_yaml_path"]
+    )
 
 
 
