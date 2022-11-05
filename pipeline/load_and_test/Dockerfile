@@ -9,5 +9,6 @@ RUN pip install faiss-cpu
 RUN pip install fastapi
 RUN pip install pydantic
 RUN pip install google-cloud
+RUN pip install gcloud
 
 COPY . .

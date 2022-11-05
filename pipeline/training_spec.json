@@ -1,14 +1,96 @@
 {
   "pipelineSpec": {
     "components": {
+      "comp-deploy-comp": {
+        "executorLabel": "exec-deploy-comp",
+        "inputDefinitions": {
+          "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "deploy_decision": {
+              "type": "STRING"
+            },
+            "document_db_path": {
+              "type": "STRING"
+            },
+            "index_faiss_file_path": {
+              "type": "STRING"
+            },
+            "index_json_file_path": {
+              "type": "STRING"
+            },
+            "pipeline_yaml_path": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-test-comp": {
+        "executorLabel": "exec-test-comp",
+        "inputDefinitions": {
+          "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "document_db_path": {
+              "type": "STRING"
+            },
+            "index_faiss_file_path": {
+              "type": "STRING"
+            },
+            "index_json_file_path": {
+              "type": "STRING"
+            },
+            "pipeline_yaml_path": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "deploy_decision": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
       "comp-training-comp": {
         "executorLabel": "exec-training-comp",
         "inputDefinitions": {
           "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
             "bucket_name": {
               "type": "STRING"
             },
             "data_path": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "document_db_path": {
+              "type": "STRING"
+            },
+            "index_faiss_file_path": {
+              "type": "STRING"
+            },
+            "index_json_file_path": {
+              "type": "STRING"
+            },
+            "pipeline_yaml_path": {
               "type": "STRING"
             }
           }
@@ -17,6 +99,46 @@
     },
     "deploymentSpec": {
       "executors": {
+        "exec-deploy-comp": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "deploy_comp"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef deploy_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    artifact_path: str = None,\n    index_faiss_file_path: str = None,\n    index_json_file_path: str = None,\n    document_db_path: str = None,\n    pipeline_yaml_path: str = None,\n    deploy_decision: str = None,\n    ):\n\n    import subprocess\n    import os\n    subprocess.run([\"ls\", \"-l\"])\n    subprocess.run([\"pip\", \"install\", \"gcloud\"])\n    #os.system(\"gcloud builds submit --config builddeploy.app.yaml\")\n    subprocess.run([\"gcloud\", \"builds\", \"submit\", \"--config\", \"builddeploy.app.yaml\"])\n\n\n    print(\"Thanks\")\n\n"
+            ],
+            "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-deploy-comp:tag1"
+          }
+        },
+        "exec-test-comp": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "test_comp"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef test_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    artifact_path: str = None,\n    index_faiss_file_path: str = None,\n    index_json_file_path: str = None,\n    document_db_path: str = None,\n    pipeline_yaml_path: str = None\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"deploy_decision\", str)\n    ],\n):\n    import os\n    import subprocess\n    from haystack.document_stores import FAISSDocumentStore\n    from haystack.nodes import FARMReader, EmbeddingRetriever\n    from haystack.pipelines import ExtractiveQAPipeline\n    from google.cloud import storage\n    from pathlib import Path\n\n    def download_files(bucket_name,\n                    prefix,\n                    dl_dir=\"./\"):\n\n            storage_client = storage.Client()\n            bucket = storage_client.get_bucket(bucket_name)\n            blobs = bucket.list_blobs(prefix=prefix)  # Get list of files\n            for blob in blobs:\n                if blob.name.endswith(\"/\"):\n                    continue\n                file_split = blob.name.split(\"/\")\n                directory = \"/\".join(file_split[0:-1])\n                Path(directory).mkdir(parents=True, exist_ok=True)\n                blob.download_to_filename(dl_dir + blob.name)\n\n\n    download_files(bucket_name=bucket_name,\n                   prefix=index_faiss_file_path,\n                   dl_dir=\"./\")\n\n    download_files(bucket_name=bucket_name,\n                   prefix=index_json_file_path,\n                   dl_dir=\"./\")\n\n    download_files(bucket_name=bucket_name,\n                   prefix=document_db_path,\n                   dl_dir=\"./\")\n\n    download_files(bucket_name=bucket_name,\n                   prefix=pipeline_yaml_path,\n                   dl_dir=\"./\")\n\n    index_file_name = index_faiss_file_path.split('/')[-1]\n    os.chdir(artifact_path)\n\n    new_document_store = FAISSDocumentStore.load(index_file_name)\n    reader = FARMReader(model_name_or_path=\"deepset/roberta-base-squad2\", use_gpu=False)\n\n    retriever = EmbeddingRetriever(\n        document_store=new_document_store,\n        embedding_model=\"sentence-transformers/multi-qa-mpnet-base-dot-v1\",\n        model_format=\"sentence_transformers\",\n        use_gpu=False,\n    )\n\n    extractive_pipe = ExtractiveQAPipeline(reader, retriever)\n\n    #### TESTING THE TRAINING COMPONENT ###\n    extractive_pred = extractive_pipe.run(\n        query=\"who is the father of Athena?\", params={\"Retriever\": {\"top_k\": 3}, \"Reader\": {\"top_k\": 3}}\n        )\n\n    for answer in extractive_pred['answers']:\n        if answer.score > 0.1:\n            print('answer:::', answer.answer)\n            print('context:::', answer.context)\n            print('confidence:::', answer.score)\n            print('\\n')\n\n    return(\"true\",)\n\n"
+            ],
+            "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-deploy:tag1"
+          }
+        },
         "exec-training-comp": {
           "container": {
             "args": [
@@ -32,7 +154,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef training_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    data_path: str =\"data/myth/\"\n    ):\n\n    from google.cloud import storage\n    from pathlib import Path\n\n\n    from haystack.utils import convert_files_to_docs, launch_es\n    from haystack.document_stores import FAISSDocumentStore\n    from haystack.nodes import PreProcessor, EmbeddingRetriever, FARMReader\n    from haystack.pipelines import ExtractiveQAPipeline\n\n    ## AUX FUNCTIONS ##\n    def download_files(bucket_name,\n                   prefix,\n                   dl_dir):\n\n        storage_client = storage.Client()\n        bucket = storage_client.get_bucket(bucket_name)\n        blobs = bucket.list_blobs(prefix=prefix)  # Get list of files\n        for blob in blobs:\n            if blob.name.endswith(\"/\"):\n                continue\n            file_split = blob.name.split(\"/\")\n            directory = \"/\".join(file_split[0:-1])\n            Path(directory).mkdir(parents=True, exist_ok=True)\n            blob.download_to_filename(blob.name) \n\n\n\n    ## MAIN WORK ##\n    download_files(bucket_name=bucket_name, prefix=data_path, dl_dir=data_path)\n\n    launch_es()\n\n    all_docs = convert_files_to_docs(dir_path=data_path)\n\n\n    preprocessor = PreProcessor(\n        clean_empty_lines=True,\n        clean_whitespace=True,\n        clean_header_footer=False,\n        split_by=\"word\",\n        split_length=100,\n        split_respect_sentence_boundary=True,\n    )\n    docs = preprocessor.process(all_docs)\n\n    print(f\"n_files_input: {len(all_docs)}\\nn_docs_output: {len(docs)}\")\n\n    document_store = FAISSDocumentStore(faiss_index_factory_str=\"Flat\",  similarity=\"cosine\")\n\n\n    retriever = EmbeddingRetriever(\n        document_store=document_store,\n        embedding_model=\"sentence-transformers/multi-qa-mpnet-base-dot-v1\",\n        model_format=\"sentence_transformers\",\n    )\n\n\n    document_store.update_embeddings(retriever=retriever)\n\n    reader = FARMReader(model_name_or_path=\"deepset/roberta-base-squad2\", use_gpu=True)\n\n\n    extractive_pipe = ExtractiveQAPipeline(reader, retriever)\n\n    extractive_pipe.save_to_yaml(path='pipe.yaml')\n    document_store.save(\"my_faiss_index.faiss\")\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef training_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    data_path: str =\"myth/data\",\n    artifact_path: str = \"myth/model/\"\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"index_faiss_file_path\", str),  \n        (\"index_json_file_path\", str),  \n        (\"document_db_path\", str),\n        (\"pipeline_yaml_path\", str), \n        (\"artifact_path\", str)\n    ],\n):\n\n    from google.cloud import storage\n    from pathlib import Path\n    import logging\n\n\n    from haystack.utils import convert_files_to_docs, launch_es\n    from haystack.document_stores import FAISSDocumentStore\n    from haystack.nodes import PreProcessor, EmbeddingRetriever, FARMReader\n    from haystack.pipelines import ExtractiveQAPipeline\n\n    ## AUX FUNCTIONS ##\n    def download_files(bucket_name,\n                   prefix,\n                   dl_dir):\n\n        storage_client = storage.Client()\n        bucket = storage_client.get_bucket(bucket_name)\n        blobs = bucket.list_blobs(prefix=prefix)  # Get list of files\n        for blob in blobs:\n            if blob.name.endswith(\"/\"):\n                continue\n            file_split = blob.name.split(\"/\")\n            directory = \"/\".join(file_split[0:-1])\n            Path(directory).mkdir(parents=True, exist_ok=True)\n            blob.download_to_filename(blob.name)\n\n    from google.cloud import storage\n\n\n    def upload_blob(bucket_name, source_file_name, destination_blob_name):\n        \"\"\"Uploads a file to the bucket.\"\"\"\n        # The ID of your GCS bucket\n        # bucket_name = \"your-bucket-name\"\n        # The path to your file to upload\n        # source_file_name = \"local/path/to/file\"\n        # The ID of your GCS object\n        # destination_blob_name = \"storage-object-name\"\n\n        storage_client = storage.Client()\n        bucket = storage_client.bucket(bucket_name)\n        blob = bucket.blob(destination_blob_name)\n\n        blob.upload_from_filename(source_file_name)\n\n        print(\n            f\"File {source_file_name} uploaded to {destination_blob_name}.\"\n        )\n\n\n\n\n    ## MAIN WORK ##\n    download_files(bucket_name=bucket_name, prefix=data_path, dl_dir=data_path)\n\n    launch_es()\n\n    all_docs = convert_files_to_docs(dir_path=data_path)\n\n    preprocessor = PreProcessor(\n        clean_empty_lines=True,\n        clean_whitespace=True,\n        clean_header_footer=False,\n        split_by=\"word\",\n        split_length=100,\n        split_respect_sentence_boundary=True,\n    )\n    docs = preprocessor.process(all_docs)\n\n    print(f\"n_files_input: {len(all_docs)}\\nn_docs_output: {len(docs)}\")\n\n    document_store = FAISSDocumentStore(faiss_index_factory_str=\"Flat\",  similarity=\"cosine\")\n    document_store.write_documents(docs)\n\n\n    retriever = EmbeddingRetriever(\n        document_store=document_store,\n        embedding_model=\"sentence-transformers/multi-qa-mpnet-base-dot-v1\",\n        model_format=\"sentence_transformers\",\n    )\n\n    document_store.update_embeddings(retriever=retriever)\n\n    reader = FARMReader(model_name_or_path=\"deepset/roberta-base-squad2\", use_gpu=True)\n\n    extractive_pipe = ExtractiveQAPipeline(reader, retriever)\n\n    extractive_pipe.save_to_yaml(path='pipe.yaml')\n    document_store.save(\"my_faiss_index.faiss\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"my_faiss_index.faiss\", \n                destination_blob_name=artifact_path + \"my_faiss_index.faiss\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"my_faiss_index.json\", \n                destination_blob_name=artifact_path + \"my_faiss_index.json\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"faiss_document_store.db\", \n                destination_blob_name=artifact_path + \"faiss_document_store.db\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"pipe.yaml\", \n                destination_blob_name=artifact_path + \"pipe.yaml\")\n\n\n    #### TESTING THE TRAINING COMPONENT ###\n    # extractive_pred = extractive_pipe.run(\n    #     query=\"who is the father of Athena?\", params={\"Retriever\": {\"top_k\": 3}, \"Reader\": {\"top_k\": 3}}\n    #     )\n\n    # for answer in extractive_pred['answers']:\n    #     if answer.score > 0.1:\n    #         print('answer:::', answer.answer)\n    #         print('context:::', answer.context)\n    #         print('confidence:::', answer.score)\n    #         print('\\n')\n\n    return(artifact_path + \"my_faiss_index.faiss\",\n    artifact_path + \"my_faiss_index.json\", \n    artifact_path + \"faiss_document_store.db\",\n    artifact_path + \"pipe.yaml\", \n    artifact_path)\n\n"
             ],
             "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-training:tag1"
           }
@@ -45,6 +167,123 @@
     "root": {
       "dag": {
         "tasks": {
+          "deploy-comp": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-deploy-comp"
+            },
+            "dependentTasks": [
+              "test-comp",
+              "training-comp"
+            ],
+            "inputs": {
+              "parameters": {
+                "artifact_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "artifact_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "bucket_name": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "filipegracio-haystack"
+                    }
+                  }
+                },
+                "deploy_decision": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "deploy_decision",
+                    "producerTask": "test-comp"
+                  }
+                },
+                "document_db_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "document_db_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "index_faiss_file_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "index_faiss_file_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "index_json_file_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "index_json_file_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "pipeline_yaml_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "pipeline_yaml_path",
+                    "producerTask": "training-comp"
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "deploy-comp"
+            }
+          },
+          "test-comp": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-test-comp"
+            },
+            "dependentTasks": [
+              "training-comp"
+            ],
+            "inputs": {
+              "parameters": {
+                "artifact_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "artifact_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "bucket_name": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "filipegracio-haystack"
+                    }
+                  }
+                },
+                "document_db_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "document_db_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "index_faiss_file_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "index_faiss_file_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "index_json_file_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "index_json_file_path",
+                    "producerTask": "training-comp"
+                  }
+                },
+                "pipeline_yaml_path": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "pipeline_yaml_path",
+                    "producerTask": "training-comp"
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "test-comp"
+            }
+          },
           "training-comp": {
             "cachingOptions": {
               "enableCache": true
@@ -54,6 +293,13 @@
             },
             "inputs": {
               "parameters": {
+                "artifact_path": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "myth/model/"
+                    }
+                  }
+                },
                 "bucket_name": {
                   "runtimeValue": {
                     "constantValue": {
@@ -64,7 +310,7 @@
                 "data_path": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "data/myth/"
+                      "stringValue": "myth/data"
                     }
                   }
                 }

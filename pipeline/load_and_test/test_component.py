@@ -2,7 +2,6 @@ from kfp.v2.dsl import component
 from typing import NamedTuple
 
 
-
 @component(
     base_image="europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-deploy:tag1",
 )
@@ -13,10 +12,12 @@ def test_comp(
     index_json_file_path: str = None,
     document_db_path: str = None,
     pipeline_yaml_path: str = None
-    ):
-
-    from fastapi import FastAPI
-    from pydantic import BaseModel
+    ) -> NamedTuple(
+    "Outputs",
+    [
+        ("deploy_decision", str)
+    ],
+):
     import os
     import subprocess
     from haystack.document_stores import FAISSDocumentStore
@@ -24,7 +25,6 @@ def test_comp(
     from haystack.pipelines import ExtractiveQAPipeline
     from google.cloud import storage
     from pathlib import Path
-
 
     def download_files(bucket_name,
                     prefix,
@@ -84,3 +84,5 @@ def test_comp(
             print('context:::', answer.context)
             print('confidence:::', answer.score)
             print('\n')
+
+    return("true",)
