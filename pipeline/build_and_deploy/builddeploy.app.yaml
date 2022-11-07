@@ -2,5 +2,6 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   timeout: 6000s
   args: [ 'build', '-t', 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app:tag1', '-f' ,'Dockerfile.app',  '.' ]
+  env: 'PROJECT_ID=filipegracio-ai-learning'
 images:
 - 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app:tag1'

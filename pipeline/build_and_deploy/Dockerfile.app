@@ -4,5 +4,7 @@ ENV PYTHONUNBUFFERED True
 
 RUN pip install fastapi
 RUN pip install pydantic
-RUN pip install gcloud
+RUN pip install uvicorn
+RUN pip install google-cloud
 COPY . .
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

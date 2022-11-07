@@ -1,29 +1,27 @@
 {
   "pipelineSpec": {
     "components": {
-      "comp-deploy-comp": {
-        "executorLabel": "exec-deploy-comp",
+      "comp-deploy-client-comp": {
+        "executorLabel": "exec-deploy-client-comp",
         "inputDefinitions": {
           "parameters": {
-            "artifact_path": {
-              "type": "STRING"
-            },
             "bucket_name": {
               "type": "STRING"
             },
             "deploy_decision": {
               "type": "STRING"
             },
-            "document_db_path": {
+            "location_of_app_docker": {
               "type": "STRING"
             },
-            "index_faiss_file_path": {
+            "location_of_app_py": {
               "type": "STRING"
-            },
-            "index_json_file_path": {
-              "type": "STRING"
-            },
-            "pipeline_yaml_path": {
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "pushed_image": {
               "type": "STRING"
             }
           }
@@ -99,13 +97,13 @@
     },
     "deploymentSpec": {
       "executors": {
-        "exec-deploy-comp": {
+        "exec-deploy-client-comp": {
           "container": {
             "args": [
               "--executor_input",
               "{{$}}",
               "--function_to_execute",
-              "deploy_comp"
+              "deploy_client_comp"
             ],
             "command": [
               "sh",
@@ -114,7 +112,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef deploy_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    artifact_path: str = None,\n    index_faiss_file_path: str = None,\n    index_json_file_path: str = None,\n    document_db_path: str = None,\n    pipeline_yaml_path: str = None,\n    deploy_decision: str = None,\n    ):\n\n    import subprocess\n    import os\n    subprocess.run([\"ls\", \"-l\"])\n    subprocess.run([\"pip\", \"install\", \"gcloud\"])\n    #os.system(\"gcloud builds submit --config builddeploy.app.yaml\")\n    subprocess.run([\"gcloud\", \"builds\", \"submit\", \"--config\", \"builddeploy.app.yaml\"])\n\n\n    print(\"Thanks\")\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef deploy_client_comp(\n    bucket_name: str =\"filipegracio-haystack\", \n    deploy_decision: str = None,\n    location_of_app_docker: str = None,\n    location_of_app_py: str = None,\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"pushed_image\", str),  \n    ],\n):\n\n    if deploy_decision == \"true\":\n        import logging\n        import os\n\n        from google.cloud.devtools import cloudbuild_v1 as cloudbuild\n        from google.protobuf.duration_pb2 import Duration\n\n        # initialize client for cloud build\n        logging.getLogger().setLevel(logging.INFO)\n        build_client = cloudbuild.services.cloud_build.CloudBuildClient()\n\n        build = cloudbuild.Build()\n        build.steps = [\n\n            {\n                \"name\": \"gcr.io/cloud-builders/gsutil\",\n                \"args\": [ 'cp', 'gs://' + bucket_name + location_of_app_docker, '.']\n            },\n                        {\n                \"name\": \"gcr.io/cloud-builders/gsutil\",\n                \"args\": [ 'cp', 'gs://' + bucket_name + location_of_app_py, '.']\n            },\n            {\n                \"name\": \"gcr.io/cloud-builders/docker\",\n                \"args\": [ 'build', '-t', 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app:tag1', '-f' ,'Dockerfile.app', \".\"]\n            },\n            {\n                \"name\": \"gcr.io/cloud-builders/docker\",\n                \"args\": ['push', 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app:tag1']\n            },\n        ]\n        # override default timeout of 10min\n        timeout = Duration()\n        timeout.seconds = 7200\n        build.timeout = timeout\n\n        # create build\n        operation = build_client.create_build(project_id=\"filipegracio-ai-learning\", build=build)\n        logging.info(\"IN PROGRESS:\")\n        logging.info(operation.metadata)\n\n        # get build status\n        result = operation.result()\n        logging.info(\"RESULT:\", result.status)\n\n        # return step outputs\n        print(\"thanks, deployed\")\n        return (\"'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app:tag1'\",)\n\n    else:\n        print(\"deploy decision was not == true\")\n\n"
             ],
             "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-deploy-comp:tag1"
           }
@@ -167,25 +165,16 @@
     "root": {
       "dag": {
         "tasks": {
-          "deploy-comp": {
-            "cachingOptions": {
-              "enableCache": true
-            },
+          "deploy-client-comp": {
+            "cachingOptions": {},
             "componentRef": {
-              "name": "comp-deploy-comp"
+              "name": "comp-deploy-client-comp"
             },
             "dependentTasks": [
-              "test-comp",
-              "training-comp"
+              "test-comp"
             ],
             "inputs": {
               "parameters": {
-                "artifact_path": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "artifact_path",
-                    "producerTask": "training-comp"
-                  }
-                },
                 "bucket_name": {
                   "runtimeValue": {
                     "constantValue": {
@@ -199,34 +188,24 @@
                     "producerTask": "test-comp"
                   }
                 },
-                "document_db_path": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "document_db_path",
-                    "producerTask": "training-comp"
+                "location_of_app_docker": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "/pipeline/tmp/Dockerfile.app"
+                    }
                   }
                 },
-                "index_faiss_file_path": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "index_faiss_file_path",
-                    "producerTask": "training-comp"
-                  }
-                },
-                "index_json_file_path": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "index_json_file_path",
-                    "producerTask": "training-comp"
-                  }
-                },
-                "pipeline_yaml_path": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "pipeline_yaml_path",
-                    "producerTask": "training-comp"
+                "location_of_app_py": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "/pipeline/tmp/main.py"
+                    }
                   }
                 }
               }
             },
             "taskInfo": {
-              "name": "deploy-comp"
+              "name": "deploy-client-comp"
             }
           },
           "test-comp": {
