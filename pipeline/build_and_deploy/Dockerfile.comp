@@ -8,7 +8,7 @@ RUN pip install farm-haystack[faiss]
 RUN pip install faiss-cpu
 RUN pip install fastapi
 RUN pip install pydantic
-RUN pip install google-cloud
+RUN pip install google-cloud-storage
 RUN pip install gcloud
 RUN pip install google-api
 RUN pip install google-api-core

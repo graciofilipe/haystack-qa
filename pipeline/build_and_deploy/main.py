@@ -7,6 +7,9 @@ from haystack.nodes import FARMReader, EmbeddingRetriever
 from haystack.pipelines import ExtractiveQAPipeline
 from datetime import datetime
 
+from google.cloud import storage
+
+
 currentDateAndTime = datetime.now()
 
 print("runniung the mains that were created at", currentDateAndTime)
