@@ -82,7 +82,7 @@ app = FastAPI()
 
 @app.get("/hello")
 async def return_hello():
-    return "Hellow"
+    return "Hellow \n"
 
 @app.post("/question/")
 async def question(question: QuestionQuery):
