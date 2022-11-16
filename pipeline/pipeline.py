@@ -45,7 +45,7 @@ def main(project_name,
                                     bucket_name=bucket_name,
                                     data_path=data_path,
                                     artifact_path=artifact_path)\
-                                        .set_caching_options(False)\
+                                        .set_caching_options(True)\
                                         .add_node_selector_constraint('cloud.google.com/gke-accelerator', 'NVIDIA_TESLA_T4')\
                                         .set_gpu_limit(1)
 

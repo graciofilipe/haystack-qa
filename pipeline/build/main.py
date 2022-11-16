@@ -55,7 +55,6 @@ download_files(bucket_name=bucket_name,
 download_files(bucket_name=bucket_name,
             prefix= ARTIFACT_PATH + document_db_path,
             dl_dir="./")
-``
 
 index_file_name = index_faiss_file_path.split('/')[-1]
 os.chdir(ARTIFACT_PATH)

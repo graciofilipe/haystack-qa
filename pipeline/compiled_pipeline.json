@@ -263,7 +263,9 @@
             }
           },
           "training-comp": {
-            "cachingOptions": {},
+            "cachingOptions": {
+              "enableCache": true
+            },
             "componentRef": {
               "name": "comp-training-comp"
             },
