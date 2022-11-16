@@ -1,0 +1,6 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  timeout: 6000s
+  args: [ 'build', '-t', 'europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-training:latest', '-f', 'training.Dockerfile', '.' ]
+images:
+- 'europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-training:latest'

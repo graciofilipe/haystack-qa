@@ -1,0 +1,7 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  timeout: 6000s
+  args: [ 'build', '-t', 'europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-app:latest', '-f' ,'app.Dockerfile',  '.' ]
+  env: 'PROJECT_ID={project_name}'
+images:
+- 'europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-app:latest'

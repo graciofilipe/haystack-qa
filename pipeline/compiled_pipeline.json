@@ -1,0 +1,300 @@
+{
+  "pipelineSpec": {
+    "components": {
+      "comp-build-comp": {
+        "executorLabel": "exec-build-comp",
+        "inputDefinitions": {
+          "parameters": {
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "docker_image_name": {
+              "type": "STRING"
+            },
+            "location_of_app_docker": {
+              "type": "STRING"
+            },
+            "location_of_app_py": {
+              "type": "STRING"
+            },
+            "training_complete": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "build_name": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-deploy-comp": {
+        "executorLabel": "exec-deploy-comp",
+        "inputDefinitions": {
+          "parameters": {
+            "app_name": {
+              "type": "STRING"
+            },
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "image_to_deploy": {
+              "type": "STRING"
+            },
+            "service_account": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "deploy_complete": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-training-comp": {
+        "executorLabel": "exec-training-comp",
+        "inputDefinitions": {
+          "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "data_path": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "artifact_path": {
+              "type": "STRING"
+            },
+            "document_db_path": {
+              "type": "STRING"
+            },
+            "index_faiss_file_path": {
+              "type": "STRING"
+            },
+            "index_json_file_path": {
+              "type": "STRING"
+            },
+            "training_complete": {
+              "type": "STRING"
+            }
+          }
+        }
+      }
+    },
+    "deploymentSpec": {
+      "executors": {
+        "exec-build-comp": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "build_comp"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef build_comp(\n    bucket_name: str =\"filipegracio-haystack\", \n    location_of_app_docker: str = None,\n    location_of_app_py: str = None,\n    docker_image_name: str = None,\n    training_complete: str = None\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"build_name\", str),  \n    ],\n):\n\n    if training_complete == \"true\":\n        import logging\n        import os\n\n        from google.cloud.devtools import cloudbuild_v1 as cloudbuild\n        from google.protobuf.duration_pb2 import Duration\n\n        # initialize client for cloud build\n        logging.getLogger().setLevel(logging.INFO)\n        build_client = cloudbuild.services.cloud_build.CloudBuildClient()\n\n        build = cloudbuild.Build()\n        build.steps = [\n\n            #First stwo steps download the container image and the app definition into the executor. \n            # (they are uploaded when the pipeline starts)\n            {\n                \"name\": \"gcr.io/cloud-builders/gsutil\",\n                \"args\": [ 'cp', 'gs://' + bucket_name + location_of_app_docker, '.']\n            },\n                        {\n                \"name\": \"gcr.io/cloud-builders/gsutil\",\n                \"args\": [ 'cp', 'gs://' + bucket_name + location_of_app_py, '.']\n            },\n\n            # Last two steps build the docker image here, and then push it to the artifact registry\n            {\n                \"name\": \"gcr.io/cloud-builders/docker\",\n                \"args\": [ 'build', '-t', 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app-' + docker_image_name +':latest', '-f' ,'app.Dockerfile', \".\"]\n            },\n            {\n                \"name\": \"gcr.io/cloud-builders/docker\",\n                \"args\": ['push', 'europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app-' + docker_image_name +':latest']\n            },\n        ]\n        # override default timeout of 10min\n        timeout = Duration()\n        timeout.seconds = 7200\n        build.timeout = timeout\n\n        # create build\n        operation = build_client.create_build(project_id=\"filipegracio-ai-learning\", build=build)\n        logging.info(\"IN PROGRESS:\")\n        logging.info(operation.metadata)\n\n        # get build status\n        result = operation.result()\n        logging.info(\"RESULT:\", result.status)\n\n        # return step outputs\n        print(\"thanks, deployed\")\n        return ('europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-app-' + docker_image_name +':latest',)\n\n    else:\n        return(\"false\",)\n\n"
+            ],
+            "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-build-comp:latest"
+          }
+        },
+        "exec-deploy-comp": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "deploy_comp"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef deploy_comp(\n    bucket_name: str =\"filipegracio-haystack\",\n    app_name: str = None, \n    artifact_path: str = None,\n    image_to_deploy: str = None,\n    service_account: str = None,\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"deploy_complete\", str),  \n    ],\n):\n\n    import subprocess\n\n    subprocess.run( [\"gcloud\", \"run\", \"deploy\", app_name, \"--cpu=2\", \"--project=filipegracio-ai-learning\", \n                    \"--min-instances=0\", \"--max-instances=1\", \"--memory=8Gi\", \n                    \"--port=80\",  \"--timeout=30m\",  \"--set-env-vars=artifact_path=\"+artifact_path,\n                    \"--image=\"+image_to_deploy, \"--service-account=\"+ service_account, \n                    \"--region=europe-west1\", \"--no-allow-unauthenticated\"])\n\n\n    return (\"true\",)\n\n"
+            ],
+            "image": "gcr.io/google.com/cloudsdktool/cloud-sdk"
+          }
+        },
+        "exec-training-comp": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "training_comp"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'kfp==1.8.14' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef training_comp(\n    bucket_name: str = None,\n    data_path: str = None,\n    artifact_path: str = None\n    ) -> NamedTuple(\n    \"Outputs\",\n    [\n        (\"index_faiss_file_path\", str),  \n        (\"index_json_file_path\", str),  \n        (\"document_db_path\", str),\n        (\"artifact_path\", str),\n        (\"training_complete\", str)\n    ],\n):\n    '''\n    bucket_name: where all the data and artifacts are or will be stored\n    data_path: where in the bucket is the data to be trained on (txt files)\n    artifact_path: where to write the model files after training\n    '''\n\n    from google.cloud import storage\n\n    from pathlib import Path\n    import logging\n\n    from haystack.utils import convert_files_to_docs, launch_es\n    from haystack.document_stores import FAISSDocumentStore\n    from haystack.nodes import PreProcessor, EmbeddingRetriever\n\n    ## AUX FUNCTIONS ##\n    def download_files(bucket_name,\n                   prefix,\n                   dl_dir):\n\n        storage_client = storage.Client()\n        bucket = storage_client.get_bucket(bucket_name)\n        blobs = bucket.list_blobs(prefix=prefix)  # Get list of files\n        for blob in blobs:\n            if blob.name.endswith(\"/\"):\n                continue\n            file_split = blob.name.split(\"/\")\n            directory = \"/\".join(file_split[0:-1])\n            Path(directory).mkdir(parents=True, exist_ok=True)\n            blob.download_to_filename(blob.name)\n\n\n    def upload_blob(bucket_name, source_file_name, destination_blob_name):\n        \"\"\"Uploads a file to the bucket.\"\"\"\n\n        storage_client = storage.Client()\n        bucket = storage_client.bucket(bucket_name)\n        blob = bucket.blob(destination_blob_name)\n\n        blob.upload_from_filename(source_file_name)\n\n        print(\n            f\"File {source_file_name} uploaded to {destination_blob_name}.\"\n        )\n\n\n\n    ## MAIN WORK ##\n    # needs to bring the data for model training\n    download_files(bucket_name=bucket_name, prefix=data_path, dl_dir=data_path)\n\n    # a search search server\n    launch_es()\n\n    # imports the local files to memory\n    all_docs = convert_files_to_docs(dir_path=data_path)\n\n    # process the documents into small docs that are easier to search\n    preprocessor = PreProcessor(\n        clean_empty_lines=True,\n        clean_whitespace=True,\n        clean_header_footer=False,\n        split_by=\"word\",\n        split_length=100,\n        split_respect_sentence_boundary=True,\n    )\n    docs = preprocessor.process(all_docs)\n\n    # writing the documents int he document store\n    document_store = FAISSDocumentStore(faiss_index_factory_str=\"Flat\",  similarity=\"cosine\")\n    document_store.write_documents(docs)\n\n    # what will do the embedding\n    retriever = EmbeddingRetriever(\n        document_store=document_store,\n        embedding_model=\"sentence-transformers/multi-qa-mpnet-base-cos-v1\",\n        model_format=\"sentence_transformers\",\n    )\n\n    document_store.update_embeddings(retriever=retriever)\n\n    # Next we need to save the result of this work\n    # this section saves the model locally and then uploads everything to \"artifact_path\" in \"bucket_name\"\n    document_store.save(\"my_faiss_index.faiss\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"my_faiss_index.faiss\", \n                destination_blob_name=artifact_path + \"my_faiss_index.faiss\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"my_faiss_index.json\", \n                destination_blob_name=artifact_path + \"my_faiss_index.json\")\n\n    upload_blob(bucket_name=bucket_name, \n                source_file_name=\"faiss_document_store.db\", \n                destination_blob_name=artifact_path + \"faiss_document_store.db\")\n\n\n    # outputs that get passed over to the next component\n    return(artifact_path + \"my_faiss_index.faiss\",\n    artifact_path + \"my_faiss_index.json\", \n    artifact_path + \"faiss_document_store.db\",\n    artifact_path,\n    \"true\")\n\n"
+            ],
+            "image": "europe-docker.pkg.dev/filipegracio-ai-learning/haystack-docker-repo/haystack-training:latest",
+            "resources": {
+              "accelerator": {
+                "count": "1",
+                "type": "NVIDIA_TESLA_T4"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pipelineInfo": {
+      "name": "haystack-training"
+    },
+    "root": {
+      "dag": {
+        "tasks": {
+          "build-comp": {
+            "cachingOptions": {},
+            "componentRef": {
+              "name": "comp-build-comp"
+            },
+            "dependentTasks": [
+              "training-comp"
+            ],
+            "inputs": {
+              "parameters": {
+                "bucket_name": {
+                  "componentInputParameter": "bucket_name"
+                },
+                "docker_image_name": {
+                  "componentInputParameter": "docker_image_name"
+                },
+                "location_of_app_docker": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "/pipeline/tmp/app.Dockerfile"
+                    }
+                  }
+                },
+                "location_of_app_py": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "/pipeline/tmp/main.py"
+                    }
+                  }
+                },
+                "training_complete": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "training_complete",
+                    "producerTask": "training-comp"
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "build-comp"
+            }
+          },
+          "deploy-comp": {
+            "cachingOptions": {},
+            "componentRef": {
+              "name": "comp-deploy-comp"
+            },
+            "dependentTasks": [
+              "build-comp"
+            ],
+            "inputs": {
+              "parameters": {
+                "app_name": {
+                  "componentInputParameter": "docker_image_name"
+                },
+                "artifact_path": {
+                  "componentInputParameter": "artifact_path"
+                },
+                "bucket_name": {
+                  "componentInputParameter": "bucket_name"
+                },
+                "image_to_deploy": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "build_name",
+                    "producerTask": "build-comp"
+                  }
+                },
+                "service_account": {
+                  "componentInputParameter": "deploy_service_account"
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "deploy-comp"
+            }
+          },
+          "training-comp": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-training-comp"
+            },
+            "inputs": {
+              "parameters": {
+                "artifact_path": {
+                  "componentInputParameter": "artifact_path"
+                },
+                "bucket_name": {
+                  "componentInputParameter": "bucket_name"
+                },
+                "data_path": {
+                  "componentInputParameter": "data_path"
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "training-comp"
+            }
+          }
+        }
+      },
+      "inputDefinitions": {
+        "parameters": {
+          "artifact_path": {
+            "type": "STRING"
+          },
+          "bucket_name": {
+            "type": "STRING"
+          },
+          "data_path": {
+            "type": "STRING"
+          },
+          "deploy_service_account": {
+            "type": "STRING"
+          },
+          "docker_image_name": {
+            "type": "STRING"
+          }
+        }
+      }
+    },
+    "schemaVersion": "2.0.0",
+    "sdkVersion": "kfp-1.8.14"
+  },
+  "runtimeConfig": {}
+}
