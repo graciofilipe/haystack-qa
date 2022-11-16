@@ -1,9 +1,11 @@
 from kfp.v2.dsl import component
 from typing import NamedTuple
+import os
 
+project_name = os.getenv("PROJECT_NAME")
 
 @component(
-    base_image="europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-build-comp:latest",
+    base_image="europe-docker.pkg.dev/"+project_name+"/haystack-docker-repo/haystack-build-comp:latest",
 )
 def build_comp(
     project_name: str = None,

@@ -1,11 +1,14 @@
 from kfp.v2.dsl import component
 from typing import NamedTuple
+import os
 
+project_name = os.getenv("PROJECT_NAME")
 
 @component(
-    base_image="europe-docker.pkg.dev/{project_name}/haystack-docker-repo/haystack-training:latest",
+    base_image="europe-docker.pkg.dev/"+project_name+"/haystack-docker-repo/haystack-training:latest",
 )
 def training_comp(
+    project_name: str=None,
     bucket_name: str = None,
     data_path: str = None,
     artifact_path: str = None
@@ -36,8 +39,8 @@ def training_comp(
 
     ## AUX FUNCTIONS ##
     def download_files(bucket_name,
-                   prefix,
-                   dl_dir):
+                       prefix,
+                       dl_dir):
 
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(bucket_name)
@@ -63,7 +66,6 @@ def training_comp(
         print(
             f"File {source_file_name} uploaded to {destination_blob_name}."
         )
-
 
 
     ## MAIN WORK ##

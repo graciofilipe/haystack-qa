@@ -1,5 +1,6 @@
 import argparse
 
+
 def main(project_name,
     service_account,
         bucket_name,
@@ -40,14 +41,16 @@ def main(project_name,
                 docker_image_name: str = None, 
                 deploy_service_account: str = None):
 
-        training_op = training_comp(bucket_name=bucket_name,
+        training_op = training_comp(project_name=project_name,
+                                    bucket_name=bucket_name,
                                     data_path=data_path,
                                     artifact_path=artifact_path)\
-                                        .set_caching_options(True)\
+                                        .set_caching_options(False)\
                                         .add_node_selector_constraint('cloud.google.com/gke-accelerator', 'NVIDIA_TESLA_T4')\
                                         .set_gpu_limit(1)
 
         build_op = build_comp(
+            project_name = project_name,
             bucket_name =bucket_name,
             location_of_app_docker="/pipeline/tmp/app.Dockerfile",
             location_of_app_py="/pipeline/tmp/main.py", 
@@ -56,6 +59,7 @@ def main(project_name,
             ).set_caching_options(False)
 
         deploy_op = deploy_comp(
+            project_name=project_name,
             bucket_name =bucket_name,
             app_name=docker_image_name, 
             artifact_path=artifact_path,
@@ -76,8 +80,8 @@ def main(project_name,
         template_path="compiled_pipeline.json",
         pipeline_root="gs://" + bucket_name + "/pipeline",
         location="europe-west4",
-        parameter_values={"project_name": project_name,,
-                                "bucket_name": bucket_name,
+        parameter_values={"project_name": project_name,
+                        "bucket_name": bucket_name,
                         "data_path": data_path, 
                         "artifact_path": artifact_path,
                         "docker_image_name":docker_image_name, 
